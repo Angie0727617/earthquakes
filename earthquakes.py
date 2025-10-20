@@ -4,7 +4,9 @@
 # This is external library that you may need to install first.
 import requests
 import json
-
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime
 
 def get_data():
     # With requests, we can ask the web service for the data.
@@ -26,7 +28,7 @@ def get_data():
     # The actual contents we care about are in its text field:
     text = response.text
     
-    # 可选：保存数据到文件以便查看结构
+   
     with open("earthquakes_data.json", "w") as f:
         f.write(text)
     
@@ -62,7 +64,7 @@ def get_maximum(data):
     if not earthquakes:
         return 0, (0, 0)
     
-    # 找到震级最大的地震
+
     max_earthquake = max(earthquakes, key=get_magnitude)
     max_magnitude = get_magnitude(max_earthquake)
     max_location = get_location(max_earthquake)
@@ -70,8 +72,121 @@ def get_maximum(data):
     return max_magnitude, max_location
 
 
-# With all the above functions defined, we can now call them and get the result
-data = get_data()
-print(f"Loaded {count_earthquakes(data)} earthquakes")
-max_magnitude, max_location = get_maximum(data)
-print(f"The strongest earthquake was at {max_location} with magnitude {max_magnitude}")
+def get_year(earthquake):
+    timestamp = earthquake['properties']['time']
+    dt = datetime.fromtimestamp(timestamp / 1000)
+    return dt.year
+
+
+def earthquakes_per_year(data):
+    earthquakes = data['features']
+    years = [get_year(eq) for eq in earthquakes]
+    
+    yearly_counts = pd.Series(years).value_counts().sort_index()
+    return yearly_counts
+
+
+def average_magnitude_per_year(data):
+    earthquakes = data['features']
+    
+    year_mag_pairs = []
+    for eq in earthquakes:
+        year = get_year(eq)
+        magnitude = get_magnitude(eq)
+        year_mag_pairs.append((year, magnitude))
+    
+    df = pd.DataFrame(year_mag_pairs, columns=['year', 'magnitude'])
+    yearly_avg_mag = df.groupby('year')['magnitude'].mean()
+    
+    return yearly_avg_mag
+
+
+def plot_frequency(yearly_counts, save_path='earthquake_frequency.png'):
+    plt.figure(figsize=(12, 6))
+    
+    plt.bar(yearly_counts.index, yearly_counts.values, 
+            color='skyblue', edgecolor='navy', alpha=0.7)
+    
+    plt.title('Earthquake Frequency Per Year (2000-2018)', 
+              fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel('Year', fontsize=12)
+    plt.ylabel('Number of Earthquakes', fontsize=12)
+    plt.grid(True, alpha=0.3, axis='y')
+    
+    plt.xticks(rotation=45)
+    
+    for i, count in enumerate(yearly_counts.values):
+        plt.text(yearly_counts.index[i], count + 0.1, str(count), 
+                ha='center', va='bottom', fontsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    print(f"✅ Saved: {save_path}")
+    return save_path
+
+
+def plot_magnitude(yearly_avg_mag, save_path='average_magnitude.png'):
+    plt.figure(figsize=(12, 6))
+    
+    plt.plot(yearly_avg_mag.index, yearly_avg_mag.values, 
+             marker='o', linewidth=2, markersize=6, 
+             color='coral', markerfacecolor='red', markeredgecolor='darkred')
+    
+    plt.title('Average Earthquake Magnitude Per Year (2000-2018)', 
+              fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel('Year', fontsize=12)
+    plt.ylabel('Average Magnitude', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(rotation=45)
+    
+    for year, mag in yearly_avg_mag.items():
+        plt.text(year, mag + 0.01, f'{mag:.2f}', 
+                ha='center', va='bottom', fontsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    print(f"✅ Saved: {save_path}")
+    return save_path
+
+
+def main():
+    print("=== Start analyse ===")
+    
+    print("loading...")
+    data = get_data()
+    total_earthquakes = count_earthquakes(data)
+    print(f"✅ seccussed {total_earthquakes} cases")
+
+    max_magnitude, max_location = get_maximum(data)
+    print(f"💥 Max: magnitude {max_magnitude}, location {max_location}")
+    
+    print("\nLoading...")
+    yearly_counts = earthquakes_per_year(data)
+    print("amount per year:")
+    for year, count in yearly_counts.items():
+        print(f"  {year}: {count} times earthquakes")
+    
+    print("\nLoading...")
+    yearly_avg_mag = average_magnitude_per_year(data)
+    print("Average magnitude:")
+    for year, avg_mag in yearly_avg_mag.items():
+        print(f"  {year}: {avg_mag:.2f}")
+
+    print("\nLoading...")
+    freq_plot_path = plot_frequency(yearly_counts)
+    mag_plot_path = plot_magnitude(yearly_avg_mag)
+    
+    print(f"\n🎉 Finished!")
+    print(f"📊 frequence: {freq_plot_path}")
+    print(f"📈 magnitude: {mag_plot_path}")
+    
+    return yearly_counts, yearly_avg_mag
+
+
+
+if __name__ == "__main__":
+    yearly_counts, yearly_avg_mag = main()
